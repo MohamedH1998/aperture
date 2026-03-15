@@ -352,3 +352,4 @@ This prints a hint to stderr (which the agent sees) after edits to visual files.
 ## License
 
 MIT
+# aperture
