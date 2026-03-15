@@ -59,7 +59,7 @@ export interface DiffResult {
 export async function computeDiff(
   currentImage: Buffer,
   url: string,
-  viewport?: { width: number; height: number }
+  viewport?: { width: number; height: number },
 ): Promise<DiffResult> {
   const key = captureKey(url, viewport);
   const previous = previousCaptures.get(key);
@@ -104,7 +104,7 @@ export async function computeDiff(
     diffPixels,
     targetWidth,
     targetHeight,
-    { threshold: 0.1 }
+    { threshold: 0.1 },
   );
 
   const totalPixels = targetWidth * targetHeight;

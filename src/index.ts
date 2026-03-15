@@ -47,8 +47,8 @@ const cleanup = async () => {
   process.exit(0);
 };
 
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
+process.on('SIGINT', () => void cleanup());
+process.on('SIGTERM', () => void cleanup());
 // BUG-024: Exit after uncaughtException — process state is unreliable
 process.on('uncaughtException', (err) => {
   console.error('[aperture] Uncaught exception:', err.message);
@@ -63,4 +63,6 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 
 console.error('[aperture] MCP server running on stdio');
-console.error('[aperture] 6 tools available: screenshot, screenshot_element, screenshot_diff, has_changed, smart_check, interact_and_screenshot');
+console.error(
+  '[aperture] 6 tools available: screenshot, screenshot_element, screenshot_diff, has_changed, smart_check, interact_and_screenshot',
+);

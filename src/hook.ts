@@ -14,7 +14,7 @@ const APERTURE_HOOK = {
     {
       type: 'command',
       command:
-        'if echo "$TOOL_INPUT" | grep -qE \'\\.(css|scss|tsx|jsx|astro|svelte|vue|html)\'; then echo \'Visual file changed — consider calling has_changed() or smart_check()\' >&2; fi',
+        "if echo \"$TOOL_INPUT\" | grep -qE '\\.(css|scss|tsx|jsx|astro|svelte|vue|html)'; then echo 'Visual file changed — consider calling has_changed() or smart_check()' >&2; fi",
     },
   ],
 };
@@ -30,7 +30,7 @@ export async function installHook(): Promise<void> {
 
   try {
     const raw = await readFile(settingsPath, 'utf-8');
-    settings = JSON.parse(raw);
+    settings = JSON.parse(raw) as Record<string, unknown>;
   } catch {
     // File doesn't exist or invalid JSON — start fresh
   }
@@ -50,7 +50,8 @@ export async function installHook(): Promise<void> {
   const alreadyInstalled = postToolUse.some((entry) => {
     if (!Array.isArray(entry.hooks)) return false;
     return (entry.hooks as Array<Record<string, unknown>>).some(
-      (h) => typeof h.command === 'string' && h.command.includes('has_changed') && h.command.includes('Visual file changed')
+      (h) =>
+        typeof h.command === 'string' && h.command.includes('has_changed') && h.command.includes('Visual file changed'),
     );
   });
 

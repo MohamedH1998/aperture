@@ -36,30 +36,36 @@ function errorResult(msg: string): ToolResult {
 }
 
 export function registerTools(server: McpServer): void {
-
   // ── screenshot ──────────────────────────────────────────────────────────────
   server.tool(
     'screenshot',
     'Capture a screenshot of a URL. Returns a JPEG image resized to fit your token budget. Default budget is 300 tokens (~640x360). Use token_budget to control cost.',
     {
       url: z.string().describe('Full URL to screenshot (e.g. http://localhost:4321)'),
-      token_budget: z.number().optional().describe('Max tokens to spend on this image. Default 300. Use 100 for thumbnails, 800+ for detail.'),
-      wait: z.union([
-        z.literal('auto'),
-        z.literal('none'),
-        z.number(),
-      ]).optional().describe('Wait strategy: "auto" (composite stability detection, default), "none" (instant), or milliseconds (fixed delay)'),
+      token_budget: z
+        .number()
+        .optional()
+        .describe('Max tokens to spend on this image. Default 300. Use 100 for thumbnails, 800+ for detail.'),
+      wait: z
+        .union([z.literal('auto'), z.literal('none'), z.number()])
+        .optional()
+        .describe(
+          'Wait strategy: "auto" (composite stability detection, default), "none" (instant), or milliseconds (fixed delay)',
+        ),
       viewport_width: z.number().min(1).max(4096).optional().describe('Viewport width in CSS pixels. Default 1280.'),
       viewport_height: z.number().min(1).max(4096).optional().describe('Viewport height in CSS pixels. Default 720.'),
       full_page: z.boolean().optional().describe('Capture full scrollable page, not just viewport. Default false.'),
     },
     async (params): Promise<ToolResult> => {
       const toolStart = Date.now();
-      log(`tool:screenshot called url=${params.url} budget=${params.token_budget} wait=${params.wait} viewport=${params.viewport_width}x${params.viewport_height} fullPage=${params.full_page}`);
+      log(
+        `tool:screenshot called url=${params.url} budget=${params.token_budget} wait=${params.wait} viewport=${params.viewport_width}x${params.viewport_height} fullPage=${params.full_page}`,
+      );
       try {
-        const viewport = (params.viewport_width || params.viewport_height)
-          ? { width: params.viewport_width ?? 1280, height: params.viewport_height ?? 720 }
-          : undefined;
+        const viewport =
+          params.viewport_width || params.viewport_height
+            ? { width: params.viewport_width ?? 1280, height: params.viewport_height ?? 720 }
+            : undefined;
 
         const result = await captureScreenshot({
           url: params.url,
@@ -73,12 +79,14 @@ export function registerTools(server: McpServer): void {
         return {
           content: [
             imageContent(result.base64),
-            textContent(JSON.stringify({
-              url: result.url,
-              dimensions: result.dimensions,
-              estimatedTokens: result.estimatedTokens,
-              capturedAt: result.capturedAt,
-            })),
+            textContent(
+              JSON.stringify({
+                url: result.url,
+                dimensions: result.dimensions,
+                estimatedTokens: result.estimatedTokens,
+                capturedAt: result.capturedAt,
+              }),
+            ),
           ],
         };
       } catch (err) {
@@ -97,9 +105,14 @@ export function registerTools(server: McpServer): void {
     'Capture a specific element by CSS selector. More token-efficient than full-page screenshots — captures only the component you care about.',
     {
       url: z.string().describe('Full URL containing the element'),
-      selector: z.string().describe('CSS selector for the element (e.g. ".pricing-card", "#hero", "[data-testid=header]")'),
+      selector: z
+        .string()
+        .describe('CSS selector for the element (e.g. ".pricing-card", "#hero", "[data-testid=header]")'),
       token_budget: z.number().optional().describe('Max tokens. Default 300.'),
-      wait: z.union([z.literal('auto'), z.literal('none'), z.number()]).optional().describe('Wait strategy. Default "auto".'),
+      wait: z
+        .union([z.literal('auto'), z.literal('none'), z.number()])
+        .optional()
+        .describe('Wait strategy. Default "auto".'),
     },
     async (params): Promise<ToolResult> => {
       try {
@@ -113,13 +126,15 @@ export function registerTools(server: McpServer): void {
         return {
           content: [
             imageContent(result.base64),
-            textContent(JSON.stringify({
-              url: result.url,
-              selector: params.selector,
-              dimensions: result.dimensions,
-              estimatedTokens: result.estimatedTokens,
-              capturedAt: result.capturedAt,
-            })),
+            textContent(
+              JSON.stringify({
+                url: result.url,
+                selector: params.selector,
+                dimensions: result.dimensions,
+                estimatedTokens: result.estimatedTokens,
+                capturedAt: result.capturedAt,
+              }),
+            ),
           ],
         };
       } catch (err) {
@@ -135,7 +150,10 @@ export function registerTools(server: McpServer): void {
     {
       url: z.string().describe('Full URL to diff'),
       token_budget: z.number().optional().describe('Max tokens per image. Default 300.'),
-      wait: z.union([z.literal('auto'), z.literal('none'), z.number()]).optional().describe('Wait strategy. Default "auto".'),
+      wait: z
+        .union([z.literal('auto'), z.literal('none'), z.number()])
+        .optional()
+        .describe('Wait strategy. Default "auto".'),
     },
     async (params): Promise<ToolResult> => {
       try {
@@ -152,13 +170,15 @@ export function registerTools(server: McpServer): void {
         if (diff.hasPrevious) {
           content.push(
             imageContent(diff.diffBase64),
-            textContent(JSON.stringify({
-              changePercent: diff.changePercent,
-              pixelsChanged: diff.pixelsChanged,
-              totalPixels: diff.totalPixels,
-              dimensions: result.dimensions,
-              estimatedTokens: result.estimatedTokens,
-            })),
+            textContent(
+              JSON.stringify({
+                changePercent: diff.changePercent,
+                pixelsChanged: diff.pixelsChanged,
+                totalPixels: diff.totalPixels,
+                dimensions: result.dimensions,
+                estimatedTokens: result.estimatedTokens,
+              }),
+            ),
           );
         } else {
           content.push(
@@ -186,11 +206,15 @@ export function registerTools(server: McpServer): void {
         const changed = detectChange(tiny, params.url);
 
         return {
-          content: [textContent(JSON.stringify({
-            changed,
-            url: params.url,
-            checkedAt: new Date().toISOString(),
-          }))],
+          content: [
+            textContent(
+              JSON.stringify({
+                changed,
+                url: params.url,
+                checkedAt: new Date().toISOString(),
+              }),
+            ),
+          ],
         };
       } catch (err) {
         return errorResult(`Change check failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -205,7 +229,10 @@ export function registerTools(server: McpServer): void {
     {
       url: z.string().describe('Full URL to check'),
       token_budget: z.number().optional().describe('Max tokens if screenshot is needed. Default 300.'),
-      wait: z.union([z.literal('auto'), z.literal('none'), z.number()]).optional().describe('Wait strategy. Default "auto".'),
+      wait: z
+        .union([z.literal('auto'), z.literal('none'), z.number()])
+        .optional()
+        .describe('Wait strategy. Default "auto".'),
     },
     async (params): Promise<ToolResult> => {
       const toolStart = Date.now();
@@ -218,11 +245,15 @@ export function registerTools(server: McpServer): void {
         if (!changed) {
           log(`tool:smart_check no change detected in ${Date.now() - toolStart}ms`);
           return {
-            content: [textContent(JSON.stringify({
-              changed: false,
-              url: params.url,
-              checkedAt: new Date().toISOString(),
-            }))],
+            content: [
+              textContent(
+                JSON.stringify({
+                  changed: false,
+                  url: params.url,
+                  checkedAt: new Date().toISOString(),
+                }),
+              ),
+            ],
           };
         }
 
@@ -238,13 +269,15 @@ export function registerTools(server: McpServer): void {
         return {
           content: [
             imageContent(result.base64),
-            textContent(JSON.stringify({
-              changed: true,
-              url: result.url,
-              dimensions: result.dimensions,
-              estimatedTokens: result.estimatedTokens,
-              capturedAt: result.capturedAt,
-            })),
+            textContent(
+              JSON.stringify({
+                changed: true,
+                url: result.url,
+                dimensions: result.dimensions,
+                estimatedTokens: result.estimatedTokens,
+                capturedAt: result.capturedAt,
+              }),
+            ),
           ],
         };
       } catch (err) {
@@ -296,8 +329,10 @@ export function registerTools(server: McpServer): void {
 
         // Wait for stability after actions (with ceiling to prevent hanging)
         try {
-          const evalPromise = page.evaluate(() => (window as any).__apertureStable);
-          const ceiling = new Promise<void>(resolve => setTimeout(resolve, 5_000));
+          const evalPromise = page.evaluate(
+            () => (window as unknown as { __apertureStable: unknown }).__apertureStable,
+          );
+          const ceiling = new Promise<void>((resolve) => setTimeout(resolve, 5_000));
           await Promise.race([evalPromise, ceiling]);
           evalPromise.catch(() => {});
         } catch {
@@ -321,12 +356,14 @@ export function registerTools(server: McpServer): void {
         return {
           content: [
             imageContent(base64),
-            textContent(JSON.stringify({
-              url: page.url(),
-              actionsExecuted: params.actions.length,
-              dimensions: { width: resized.info.width, height: resized.info.height },
-              estimatedTokens,
-            })),
+            textContent(
+              JSON.stringify({
+                url: page.url(),
+                actionsExecuted: params.actions.length,
+                dimensions: { width: resized.info.width, height: resized.info.height },
+                estimatedTokens,
+              }),
+            ),
           ],
         };
       } catch (err) {

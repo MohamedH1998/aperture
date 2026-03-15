@@ -56,9 +56,9 @@ async function waitForStability(page: Awaited<ReturnType<typeof getPage>>, wait:
   const stabilityStart = Date.now();
   const STABILITY_CEILING_MS = 2_000;
   try {
-    const evaluatePromise = page.evaluate(() => (window as any).__apertureStable);
+    const evaluatePromise = page.evaluate(() => (window as unknown as { __apertureStable: unknown }).__apertureStable);
     // Plain setTimeout — doesn't depend on the page being alive
-    const ceilingPromise = new Promise<void>(resolve => setTimeout(resolve, STABILITY_CEILING_MS));
+    const ceilingPromise = new Promise<void>((resolve) => setTimeout(resolve, STABILITY_CEILING_MS));
 
     await Promise.race([evaluatePromise, ceilingPromise]);
     // Prevent unhandled rejection from the losing promise
@@ -84,7 +84,9 @@ export async function captureScreenshot(opts: CaptureOptions): Promise<CaptureRe
   const dims = dimensionsFromBudget(budget);
   const pipelineStart = Date.now();
 
-  log(`capture: url=${opts.url} budget=${budget} wait=${wait} dims=${dims.width}x${dims.height} fullPage=${opts.fullPage ?? false}`);
+  log(
+    `capture: url=${opts.url} budget=${budget} wait=${wait} dims=${dims.width}x${dims.height} fullPage=${opts.fullPage ?? false}`,
+  );
 
   log('capture: getting page');
   const page = await getPage(opts.url, opts.viewport);
@@ -133,7 +135,9 @@ export async function captureScreenshot(opts: CaptureOptions): Promise<CaptureRe
     const base64 = resized.data.toString('base64');
     const estimatedTokens = Math.ceil((resized.info.width * resized.info.height) / 750);
 
-    log(`capture: done in ${Date.now() - pipelineStart}ms, ${resized.info.width}x${resized.info.height}, ~${estimatedTokens} tokens, ${resized.data.length} bytes`);
+    log(
+      `capture: done in ${Date.now() - pipelineStart}ms, ${resized.info.width}x${resized.info.height}, ~${estimatedTokens} tokens, ${resized.data.length} bytes`,
+    );
 
     return {
       image: resized.data,
@@ -163,11 +167,8 @@ export async function captureTiny(url: string, viewport?: { width: number; heigh
 
     // Short stability wait — we just need it roughly settled
     try {
-      const evalPromise = page.evaluate(() => (window as any).__apertureStable);
-      await Promise.race([
-        evalPromise,
-        new Promise<void>(resolve => setTimeout(resolve, 1500)),
-      ]);
+      const evalPromise = page.evaluate(() => (window as unknown as { __apertureStable: unknown }).__apertureStable);
+      await Promise.race([evalPromise, new Promise<void>((resolve) => setTimeout(resolve, 1500))]);
       evalPromise.catch(() => {});
     } catch {
       if (!page.isClosed()) {
@@ -179,10 +180,7 @@ export async function captureTiny(url: string, viewport?: { width: number; heigh
     log(`captureTiny: done in ${Date.now() - start}ms`);
 
     // Resize to tiny — just for comparison
-    return sharp(raw)
-      .resize(160, 90, { fit: 'fill' })
-      .jpeg({ quality: 50 })
-      .toBuffer();
+    return sharp(raw).resize(160, 90, { fit: 'fill' }).jpeg({ quality: 50 }).toBuffer();
   } finally {
     await page.close();
   }

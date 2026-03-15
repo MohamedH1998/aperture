@@ -33,7 +33,7 @@ function resetIdleTimer() {
   idleTimer = setTimeout(() => {
     log('idle timer fired, shutting down browser');
     // BUG-022: Handle async shutdown errors
-    shutdown().catch(err => log(`idle shutdown error: ${err instanceof Error ? err.message : String(err)}`));
+    shutdown().catch((err) => log(`idle shutdown error: ${err instanceof Error ? err.message : String(err)}`));
   }, IDLE_TIMEOUT_MS);
 }
 
@@ -175,7 +175,7 @@ export async function getPage(url: string, viewport?: { width: number; height: n
   page.on('pageerror', (err) => log(`page JS error: ${err.message}`));
 
   // Block heavy media that slows page load but doesn't affect screenshots
-  await page.route(/\.(mp4|webm|ogg|mp3|wav|flac|avi)(\?.*)?$/i, route => route.abort());
+  await page.route(/\.(mp4|webm|ogg|mp3|wav|flac|avi)(\?.*)?$/i, (route) => route.abort());
 
   if (viewport) {
     log(`setting viewport to ${viewport.width}x${viewport.height}`);
@@ -191,7 +191,11 @@ export async function getPage(url: string, viewport?: { width: number; height: n
         log(`injecting localStorage for ${origin} via initScript`);
         await page.addInitScript((storageItems: Record<string, string>) => {
           for (const [k, v] of Object.entries(storageItems)) {
-            try { localStorage.setItem(k, v); } catch { /* ignore */ }
+            try {
+              localStorage.setItem(k, v);
+            } catch {
+              /* ignore */
+            }
           }
         }, items);
       }
@@ -211,12 +215,16 @@ export async function shutdown(): Promise<void> {
   }
   if (context) {
     log('closing browser context');
-    await context.close().catch((err) => log(`context close error: ${err instanceof Error ? err.message : String(err)}`));
+    await context
+      .close()
+      .catch((err) => log(`context close error: ${err instanceof Error ? err.message : String(err)}`));
     context = null;
   }
   if (browser) {
     log('closing browser');
-    await browser.close().catch((err) => log(`browser close error: ${err instanceof Error ? err.message : String(err)}`));
+    await browser
+      .close()
+      .catch((err) => log(`browser close error: ${err instanceof Error ? err.message : String(err)}`));
     browser = null;
   }
   browserPromise = null;

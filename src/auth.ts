@@ -55,7 +55,7 @@ export async function loadAuth(): Promise<AuthConfig> {
   const configPath = join(process.cwd(), '.aperture', 'auth.json');
   try {
     const raw = await readFile(configPath, 'utf-8');
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     // BUG-023: Validate structure at runtime
     const config = authConfigSchema.parse(parsed);
     log(`loaded auth config from ${configPath}`);
@@ -63,7 +63,7 @@ export async function loadAuth(): Promise<AuthConfig> {
   } catch (err) {
     if (err instanceof z.ZodError) {
       // BUG-034: Use log() instead of console.error
-      log(`invalid auth config at ${configPath}: ${err.issues.map(i => i.message).join(', ')}`);
+      log(`invalid auth config at ${configPath}: ${err.issues.map((i) => i.message).join(', ')}`);
       return {};
     }
     // No auth config — that's fine, most dev pages don't need it
