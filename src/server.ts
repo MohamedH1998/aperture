@@ -290,15 +290,34 @@ export function registerTools(server: McpServer): void {
 
   // ── interact_and_screenshot ─────────────────────────────────────────────────
   const actionSchema = z.discriminatedUnion('type', [
-    z.object({ type: z.literal('click'), selector: z.string() }),
+    z.object({
+      type: z.literal('click'),
+      selector: z.string(),
+      force: z
+        .boolean()
+        .optional()
+        .describe('Skip visibility/interactability checks. Use when the element exists but is off-screen or obscured.'),
+    }),
     z.object({ type: z.literal('fill'), selector: z.string(), value: z.string() }),
+    z.object({ type: z.literal('hover'), selector: z.string() }),
+    z.object({
+      type: z.literal('scroll'),
+      x: z.number().optional().describe('Horizontal scroll delta in pixels. Default 0.'),
+      y: z.number().optional().describe('Vertical scroll delta in pixels. Default 0.'),
+      selector: z.string().optional().describe('CSS selector to scroll into view. If provided, x/y are ignored.'),
+    }),
+    z.object({
+      type: z.literal('select_option'),
+      selector: z.string(),
+      value: z.string().describe('Option value to select'),
+    }),
     z.object({ type: z.literal('wait'), ms: z.number().max(30_000) }),
     z.object({ type: z.literal('navigate'), url: z.string() }),
   ]);
 
   server.tool(
     'interact_and_screenshot',
-    'Execute a sequence of browser actions (click, fill, wait, navigate) then capture a screenshot. Useful for reaching authenticated pages or specific UI states.',
+    'Execute a sequence of browser actions (click, fill, hover, scroll, select_option, wait, navigate) then capture a screenshot. click supports force:true to bypass visibility checks. scroll accepts x/y deltas or a selector to scroll into view.',
     {
       url: z.string().describe('Starting URL'),
       actions: z.array(actionSchema).max(50).describe('Actions to perform before capturing'),
@@ -313,10 +332,23 @@ export function registerTools(server: McpServer): void {
         for (const action of params.actions) {
           switch (action.type) {
             case 'click':
-              await page.locator(action.selector).click({ timeout: 5_000 });
+              await page.locator(action.selector).click({ timeout: 5_000, force: action.force ?? false });
               break;
             case 'fill':
               await page.locator(action.selector).fill(action.value);
+              break;
+            case 'hover':
+              await page.locator(action.selector).hover({ timeout: 5_000 });
+              break;
+            case 'scroll':
+              if (action.selector) {
+                await page.locator(action.selector).scrollIntoViewIfNeeded({ timeout: 5_000 });
+              } else {
+                await page.mouse.wheel(action.x ?? 0, action.y ?? 0);
+              }
+              break;
+            case 'select_option':
+              await page.locator(action.selector).selectOption(action.value, { timeout: 5_000 });
               break;
             case 'wait':
               await page.waitForTimeout(action.ms);

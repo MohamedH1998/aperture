@@ -11,7 +11,8 @@
  */
 
 import sharp from 'sharp';
-import { getPage } from './browser.js';
+import type { Page } from 'playwright-core';
+import { getOrCreatePage, keepPageWarm } from './browser.js';
 import { dimensionsFromBudget, DEFAULT_BUDGET, type Dimensions } from './budget.js';
 import { log } from './log.js';
 
@@ -35,7 +36,7 @@ export interface CaptureResult {
   capturedAt: string;
 }
 
-async function waitForStability(page: Awaited<ReturnType<typeof getPage>>, wait: WaitStrategy): Promise<void> {
+async function waitForStability(page: Page, wait: WaitStrategy): Promise<void> {
   if (wait === 'none') {
     log('stability: skipped (wait=none)');
     return;
@@ -88,35 +89,43 @@ export async function captureScreenshot(opts: CaptureOptions): Promise<CaptureRe
     `capture: url=${opts.url} budget=${budget} wait=${wait} dims=${dims.width}x${dims.height} fullPage=${opts.fullPage ?? false}`,
   );
 
-  log('capture: getting page');
-  const page = await getPage(opts.url, opts.viewport);
-  log(`capture: page ready (+${Date.now() - pipelineStart}ms)`);
+  const { page, isWarm } = await getOrCreatePage(opts.url, opts.viewport);
+  log(`capture: page ready (warm=${isWarm}) (+${Date.now() - pipelineStart}ms)`);
 
   try {
-    log('capture: navigating (goto)');
-    const gotoStart = Date.now();
-    await page.goto(opts.url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 15_000,
-    });
-    log(`capture: DOM ready (+${Date.now() - gotoStart}ms)`);
-
-    await waitForStability(page, wait);
+    if (isWarm) {
+      // Warm page — skip navigation, just wait one frame for any in-flight HMR render
+      if (wait !== 'none') {
+        await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => r())));
+      }
+      log(`capture: warm page settled (+${Date.now() - pipelineStart}ms)`);
+    } else {
+      // Cold page — full navigation + stability
+      log('capture: navigating (goto)');
+      const gotoStart = Date.now();
+      await page.goto(opts.url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 15_000,
+      });
+      log(`capture: DOM ready (+${Date.now() - gotoStart}ms)`);
+      await waitForStability(page, wait);
+    }
 
     let rawBuffer: Buffer;
 
     if (opts.selector) {
-      // Element screenshot
+      // Element screenshot — must use PNG for transparency
       log(`capture: waiting for selector "${opts.selector}"`);
       const locator = page.locator(opts.selector);
       await locator.waitFor({ state: 'visible', timeout: 5_000 });
       log('capture: taking element screenshot');
       rawBuffer = await locator.screenshot({ type: 'png' });
     } else {
-      // Full viewport or full page
-      log('capture: taking screenshot');
+      // Full viewport/page — take JPEG directly, skip PNG round-trip
+      log('capture: taking screenshot (jpeg)');
       rawBuffer = await page.screenshot({
-        type: 'png',
+        type: 'jpeg',
+        quality: 90,
         fullPage: opts.fullPage ?? false,
       });
     }
@@ -139,6 +148,9 @@ export async function captureScreenshot(opts: CaptureOptions): Promise<CaptureRe
       `capture: done in ${Date.now() - pipelineStart}ms, ${resized.info.width}x${resized.info.height}, ~${estimatedTokens} tokens, ${resized.data.length} bytes`,
     );
 
+    // Keep page warm for next call
+    keepPageWarm(opts.url, page);
+
     return {
       image: resized.data,
       base64,
@@ -147,8 +159,10 @@ export async function captureScreenshot(opts: CaptureOptions): Promise<CaptureRe
       url: opts.url,
       capturedAt: new Date().toISOString(),
     };
-  } finally {
-    await page.close();
+  } catch (err) {
+    // On error, close the page — don't keep broken pages warm
+    await page.close().catch(() => {});
+    throw err;
   }
 }
 
@@ -159,29 +173,36 @@ export async function captureScreenshot(opts: CaptureOptions): Promise<CaptureRe
 export async function captureTiny(url: string, viewport?: { width: number; height: number }): Promise<Buffer> {
   log(`captureTiny: url=${url}`);
   const start = Date.now();
-  const page = await getPage(url, viewport);
+  const { page, isWarm } = await getOrCreatePage(url, viewport);
 
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-    log(`captureTiny: DOM ready (+${Date.now() - start}ms)`);
+    if (isWarm) {
+      await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => r())));
+    } else {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+      log(`captureTiny: DOM ready (+${Date.now() - start}ms)`);
 
-    // Short stability wait — we just need it roughly settled
-    try {
-      const evalPromise = page.evaluate(() => (window as unknown as { __apertureStable: unknown }).__apertureStable);
-      await Promise.race([evalPromise, new Promise<void>((resolve) => setTimeout(resolve, 1500))]);
-      evalPromise.catch(() => {});
-    } catch {
-      if (!page.isClosed()) {
-        await page.waitForTimeout(500).catch(() => {});
+      // Short stability wait — we just need it roughly settled
+      try {
+        const evalPromise = page.evaluate(() => (window as unknown as { __apertureStable: unknown }).__apertureStable);
+        await Promise.race([evalPromise, new Promise<void>((resolve) => setTimeout(resolve, 1500))]);
+        evalPromise.catch(() => {});
+      } catch {
+        if (!page.isClosed()) {
+          await page.waitForTimeout(500).catch(() => {});
+        }
       }
     }
 
-    const raw = await page.screenshot({ type: 'jpeg' });
-    log(`captureTiny: done in ${Date.now() - start}ms`);
+    const raw = await page.screenshot({ type: 'jpeg', quality: 50 });
+    log(`captureTiny: done in ${Date.now() - start}ms (warm=${isWarm})`);
+
+    keepPageWarm(url, page);
 
     // Resize to tiny — just for comparison
     return sharp(raw).resize(160, 90, { fit: 'fill' }).jpeg({ quality: 50 }).toBuffer();
-  } finally {
-    await page.close();
+  } catch (err) {
+    await page.close().catch(() => {});
+    throw err;
   }
 }

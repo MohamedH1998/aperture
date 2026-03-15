@@ -26,6 +26,10 @@ let contextPromise: Promise<BrowserContext> | null = null;
 // BUG-004: Track active pages to prevent idle shutdown during work
 let activePageCount = 0;
 
+// Warm page pool — reuse pages for repeated screenshots of the same URL
+const warmPages = new Map<string, Page>();
+const MAX_WARM_PAGES = 3;
+
 function resetIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer);
   // BUG-004: Don't set idle timer while pages are open
@@ -207,11 +211,66 @@ export async function getPage(url: string, viewport?: { width: number; height: n
   return page;
 }
 
+/**
+ * Get a warm page from the pool, or create a fresh one.
+ * Warm pages skip page creation + navigation — just screenshot directly.
+ */
+export async function getOrCreatePage(
+  url: string,
+  viewport?: { width: number; height: number },
+): Promise<{ page: Page; isWarm: boolean }> {
+  validateUrl(url);
+
+  const cached = warmPages.get(url);
+  if (cached && !cached.isClosed()) {
+    log(`reusing warm page for ${url}`);
+    if (viewport) await cached.setViewportSize(viewport);
+    resetIdleTimer();
+    return { page: cached, isWarm: true };
+  }
+
+  // Stale entry — remove it
+  if (cached) warmPages.delete(url);
+
+  const page = await getPage(url, viewport);
+  return { page, isWarm: false };
+}
+
+/**
+ * Return a page to the warm pool instead of closing it.
+ * Evicts oldest entry if pool is full.
+ */
+export function keepPageWarm(url: string, page: Page): void {
+  if (page.isClosed()) return;
+
+  // Already cached
+  if (warmPages.get(url) === page) return;
+
+  // Evict oldest if at capacity
+  if (warmPages.size >= MAX_WARM_PAGES && !warmPages.has(url)) {
+    const oldestUrl = warmPages.keys().next().value as string;
+    const oldPage = warmPages.get(oldestUrl);
+    warmPages.delete(oldestUrl);
+    if (oldPage && !oldPage.isClosed()) {
+      oldPage.close().catch(() => {});
+    }
+  }
+
+  warmPages.set(url, page);
+}
+
 export async function shutdown(): Promise<void> {
   log('shutdown called');
   if (idleTimer) {
     clearTimeout(idleTimer);
     idleTimer = null;
+  }
+  // Close all warm pages
+  for (const [url, page] of warmPages) {
+    if (!page.isClosed()) {
+      await page.close().catch(() => {});
+    }
+    warmPages.delete(url);
   }
   if (context) {
     log('closing browser context');
