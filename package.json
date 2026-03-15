@@ -1,17 +1,17 @@
 {
   "name": "aperture-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Token-budget-aware visual feedback loop for AI coding agents",
   "type": "module",
   "license": "MIT",
   "packageManager": "pnpm@10.4.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mohamedhassan/aperture-mcp.git"
+    "url": "https://github.com/MohamedH1998/aperture.git"
   },
-  "homepage": "https://github.com/mohamedhassan/aperture-mcp#readme",
+  "homepage": "https://github.com/MohamedH1998/aperture#readme",
   "bugs": {
-    "url": "https://github.com/mohamedhassan/aperture-mcp/issues"
+    "url": "https://github.com/MohamedH1998/aperture/issues"
   },
   "keywords": [
     "mcp",
